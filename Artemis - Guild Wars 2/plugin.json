@@ -1,0 +1,10 @@
+{
+  "Guid": "22f507e8-db05-484f-af92-53d7c90e8919",
+  "Name": "Artemis - Guild Wars 2",
+  "Description": "Guild Wars 2 Module for Artemis, providing general MumbleAPI based info",
+  "Author": "Jamey Pearce",
+  "Website": null,
+  "Repository": null,
+  "Version": "1.0.0.0",
+  "Main": "Artemis___Guild_Wars_2.dll"
+}
