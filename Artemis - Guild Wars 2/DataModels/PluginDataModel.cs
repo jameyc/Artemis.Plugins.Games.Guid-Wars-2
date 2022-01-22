@@ -2,9 +2,28 @@
 using System.Collections.Generic;
 using Gw2Sharp;
 using System.Linq;
+using SkiaSharp;
+using System;
 
 namespace Artemis___Guild_Wars_2.DataModels
 {
+	/*
+	public struct MapColors
+	{
+		public MapColors(string sky, string ground, string ambiant)
+		{
+			this.Sky = SKColor.Parse(sky);
+			this.Ground = SKColor.Parse(ground);
+			this.Ambiant = SKColor.Parse(ambiant);
+		}
+
+		public SkiaSharp.SKColor Ambiant { get; set; }
+		public SkiaSharp.SKColor Sky { get; set; }
+		public SkiaSharp.SKColor Ground { get; set; }
+		// TODO - effect or similar? Per color? 
+	}
+	*/
+
 	public class PluginDataModel : DataModel
 	{ 
 		public PluginDataModel()
@@ -13,6 +32,15 @@ namespace Artemis___Guild_Wars_2.DataModels
 			CompetitiveInfo = new CompetitiveInfo();
 			MapInfo = new MapInfo();
 			UiInfo = new UiInfo();
+			TyrianTime = new TyrianTime();
+
+			/*
+			IDictionary<int, MapColors> mapColors = new Dictionary<int, MapColors>()
+			{
+				{15, new MapColors("0000ff", "553311", "dddddd") }
+			};
+			*/
+
 		}
 
 		public void Update(double deltaTime, Gw2Client client, bool doFullUpdate)
@@ -24,6 +52,7 @@ namespace Artemis___Guild_Wars_2.DataModels
 			MapInfo.Update(deltaTime, client, doFullUpdate);
 			UiInfo.Update(deltaTime, client, doFullUpdate);
 			CompetitiveInfo.Update(deltaTime, client, doFullUpdate);
+			TyrianTime.Update(deltaTime, client, doFullUpdate);
 		}
 
 		[DataModelProperty(Name = "Available", Description = "Mumble interface is up. Should always be true if module active.")]
@@ -38,6 +67,9 @@ namespace Artemis___Guild_Wars_2.DataModels
 
 		[DataModelProperty(Name = "Map")]
 		public MapInfo MapInfo { get; set; }
+
+		[DataModelProperty(Name = "Tyrian Time")]
+		public TyrianTime TyrianTime { get; set; }
 
 		[DataModelProperty(Name = "UI")]
 		public UiInfo UiInfo { get; set; }
@@ -218,6 +250,13 @@ namespace Artemis___Guild_Wars_2.DataModels
 			PlayerLocationMap = hasInfo ? client.Mumble.PlayerLocationMap.ToList() : new List<double>() { 0, 0 };
 
 			List<double> currentLocation = client.Mumble.PlayerLocationMap.ToList();
+
+			string TimeOfDay = TyrianTime.GetTimeOfDay();
+			// Could probably store these in a json for the user to load with defs, that way there was
+			// external loading. Use defaults or error if it's not loaded.
+			SkyColor = SKColor.Parse(TimeOfDay == "Night" ? "ff000011" : TimeOfDay == "Day" ? "ff3333bb" : "ff553344");
+			AmbientColor = SKColor.Parse(TimeOfDay == "Night" ? "ff022205" : TimeOfDay == "Day" ? "ff11aa22" : "ff007722");
+			GroundColor = SKColor.Parse(TimeOfDay == "Night" ? "ff443311" : TimeOfDay == "Day" ? "ff666644" : "ff554411");
 			/*
 			if (fuzzyCompareLocations(lastLocation, currentLocation))
 			{
@@ -232,6 +271,7 @@ namespace Artemis___Guild_Wars_2.DataModels
 			// lastLocation = currentLocation;
 		}
 
+		// TODO - Eventually this might tell if the user is standing still for a while
 		private bool fuzzyCompareLocations(List<double> locationA, List<double> locationB)
 		{
 			bool fuzzyCompareNumbers(double a, double b, double t = 1) { return System.Math.Abs(a - b) < t; }
@@ -248,11 +288,21 @@ namespace Artemis___Guild_Wars_2.DataModels
 
 		[DataModelProperty(Name = "Map ID", Description = "Current map ID")]
 		public int MapId { get; set; }
+
 		[DataModelProperty(Name = "Map Name", Description = "Current map Name")]
 		public string MapName { get; set; }
 
 		[DataModelProperty(Name = "Map scale", Description = "Scale of current map")]
 		public double MapScale { get; set; }
+
+		[DataModelProperty(Name = "Sky color", Description = "Current map's sky color")]
+		public SkiaSharp.SKColor SkyColor { get; set; }
+
+		[DataModelProperty(Name = "Ambient color", Description = "Current map's ambient color")]
+		public SkiaSharp.SKColor AmbientColor { get; set; }
+
+		[DataModelProperty(Name = "Ground color", Description = "Current map's ground color")]
+		public SkiaSharp.SKColor GroundColor { get; set; }
 
 		// See https://github.archomeda.eu/Gw2Sharp/master/api/Gw2Sharp.Models.MapType.html for types
 		[DataModelProperty(Name = "Map type", Description = "Current map type, mostly used by WvW")]
@@ -261,9 +311,68 @@ namespace Artemis___Guild_Wars_2.DataModels
 		[DataModelProperty(Name = "Player's map location", Description = "Player's location in map")]
 		public List<double> PlayerLocationMap { get; set; }
 
-		// TODO - move to map submodel
 		[DataModelProperty(Name = "Seconds at current location", Description = "How long has the player been in this spot? Used to detect standing still")]
 		public double SecondsAtCurrentLocation { get; set; }
+	}
+
+	public class TyrianTime
+	{
+		public System.DateTime moment;
+
+		public TyrianTime() { }
+
+		public void Update(double deltaTime, Gw2Client client, bool doFullUpdate)
+		{
+			// This may need to be offset by an hour
+			moment = System.DateTime.UtcNow;
+
+			// 5 mins per Tyrian hour
+			Hour = GetTyrianHour();
+			Minute = GetTyrianMinute();
+			TimeOfDay = GetTimeOfDay();
+
+		}
+
+		public static int GetTyrianHour()
+		{
+			// This may need to be inverted if times are
+			// offset by half a day (add 1 to hr to invert)
+			System.DateTime moment = System.DateTime.UtcNow;
+			return (moment.Hour % 2) * 12 + moment.Minute / 5;
+		}
+
+		public static int GetTyrianMinute()
+		{
+			// Every real world minute = 20 Tyrian minutes.
+			// Because the 2 hour cycle is asymmetric...
+			// real world minutes
+			// 1 minute = 12 mins
+			// 30 seconds = 6 mins
+			// 15 seconds = 3 mins
+			// 5 seconds = 1 min
+			System.DateTime moment = System.DateTime.UtcNow;
+			return (moment.Minute % 5) * 12 + (moment.Second / 5);
+
+			// or maybe
+			// TimeSpan test = DateTime.UtcNow - new DateTime.UtcNow; // TODO zero out second utcnow's hh:mm:ss
+			// int TyrianMinutes = test.TotalSeconds / 3;
+		}
+
+		public static string GetTimeOfDay()
+		{
+			int Hour = System.DateTime.UtcNow.Hour;
+			return (Hour > 21 || Hour < 5) ? "Night" : Hour > 20 ? "Dusk" : Hour > 6 ? "Day" : "Dawn";
+		}
+
+		[DataModelProperty(Name = "Hour", Description = "")]
+		public int Hour { get; set; }
+
+		[DataModelProperty(Name = "Minute", Description = "")]
+		public int Minute { get; set; }
+
+		[DataModelProperty(Name = "Time of Day", Description = "Time of day (Dawn, Day, Dusk, Night)")]
+		public string TimeOfDay { get; set; }
+
 	}
 
 	public class UiInfo
